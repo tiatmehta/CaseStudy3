@@ -1,0 +1,82 @@
+---
+title: "Case Study 3 - R Shiny Application"
+author: "Tia Mehta"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+The dataset I chose was: <https://www.kaggle.com/datasets/alessiasimone/lego-sets-and-price-1955-2023/data>. It merged two datasets to create one that includes the star rating, prices, etc. of lego sets. I decided to create a model that would predict the star ratings of the sets based on the features in the dataset.
+
+```{r, echo=T}
+#convert csv into dataframe
+lego_data <- read.csv("Output.csv", sep = ';')
+head(lego_data)
+```
+
+```{r}
+library(dplyr)
+
+#drop unwanted columns
+lego_data <- lego_data %>% select(-Sets.URL, -Part.URL)
+
+#remove nan values
+lego_data <- na.omit(lego_data)
+
+lego_data$`Star.rating` <- gsub(",", ".", lego_data$`Star.rating`, fixed = TRUE)
+
+lego_data$`Set.Price` <- gsub(",", ".", lego_data$`Set.Price`, fixed = TRUE)
+
+head(lego_data)
+```
+
+```{r}
+library(xgboost)
+
+target_variable <- "Star.rating"
+
+# Assuming 'lego_data' is your data frame
+X <- data.matrix(lego_data[, setdiff(names(lego_data), target_variable)])
+y <- lego_data[[target_variable]]
+
+model <- xgboost(data = X, label = y, nrounds = 500, max_depth = 5, eta = 0.06, objective = "reg:squarederror")
+
+# Create a data matrix for prediction using xgb.DMatrix
+newdata <- xgb.DMatrix(data.matrix(lego_data[, setdiff(names(lego_data), target_variable)]))
+
+# Make predictions
+predictions <- predict(model, newdata = newdata)
+
+# Ensure both y and predictions are numeric vectors
+y <- as.numeric(y)
+predictions <- as.numeric(predictions)
+
+# Make sure y and predictions have the same length
+if (length(y) != length(predictions)) {
+  stop("Lengths of 'y' and 'predictions' do not match.")
+}
+
+# Calculate RMSE
+rmse <- sqrt(mean((y - predictions)^2))
+print(paste("RMSE:", round(rmse, 3)))
+```
+
+I used the XGBoost library to create and train my model. Since I am trying to predict the star rating of sets based on features, I needed a model that dealt with regression. The algorithm optimizes a regression objective function, and is trained to minimize the squared error between the actual and predicted values. The model is then evaluated using the RMSE to assess how well it captures the relationship between the input features and the target variable. The RSME I got is: 0.041, meaning that the models predicted values are very close to the actual values.
+
+```{r}
+residuals <- y - predictions
+
+#residual Plot
+plot(residuals, main = "Residual Plot", xlab = "Observation", ylab = "Residuals")
+
+```
+
+I made a residual plot to visualize the goodness of the fit of the model, and see if there are any trends or patterns that can be observed. The spread is roughly consistent, which means the model is good.
+
+```{r scatter_plot, echo=FALSE}
+plot(predictions, y, main = "Actual vs. Predicted", xlab = "Predicted", ylab = "Actual")
+abline(a = 0, b = 1, col = "red")  
+```
+
+Lastly, I plotted the predicted values of the model versus the actual values from the dataset. From this graph, it seems that the model predicted values that were usually fairly close to the actual star ratings of the set. I decided to use this graph in my Shiny app since it is much easier for the user to understand.
